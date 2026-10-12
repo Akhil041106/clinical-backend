@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CarePulse Healthcare System - Secure Portal Gateway</title>
+    <link rel="stylesheet" th:href="@{/style.css}">
+    <style>
+        .portal-switcher {
+            display: flex;
+            background: #f1f5f9;
+            padding: 4px;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            gap: 4px;
+        }
+        .portal-btn {
+            flex: 1;
+            padding: 0.65rem 0.5rem;
+            border: none;
+            background: transparent;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        .portal-btn.active {
+            background: #ffffff;
+            color: var(--primary);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .portal-notice {
+            background: var(--primary-light);
+            border: 1px solid var(--primary-border);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            margin-bottom: 1.25rem;
+            color: #0f766e;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .portal-notice-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.3rem 0.65rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .portal-notice-btn:hover {
+            background: var(--primary-hover);
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-wrapper">
+        <div class="auth-card" style="max-width: 520px;">
+            <div class="auth-header">
+                <div class="brand" style="justify-content: center; margin-bottom: 0.75rem;">
+                    <div class="brand-icon">🏥</div>
+                    <span>CarePulse Healthcare System</span>
+                </div>
+                <h2 id="portalHeading" style="font-size: 1.4rem; color: var(--text-main); font-weight: 700;">Clinical Portal Access</h2>
+                <p id="portalSubheading" style="color: var(--text-muted); font-size: 0.9rem;">Select your dedicated portal below</p>
+            </div>
+
+            <!-- Portal Selector Tabs -->
+            <div class="portal-switcher">
+                <button type="button" class="portal-btn" id="btnAdminPortal" onclick="selectPortal('admin')">
+                    🛡️ Admin Portal
+                </button>
+                <button type="button" class="portal-btn" id="btnPatientPortal" onclick="selectPortal('patient')">
+                    👤 Patient Portal
+                </button>
+                <button type="button" class="portal-btn" id="btnDoctorPortal" onclick="selectPortal('doctor')">
+                    🩺 Doctor Portal
+                </button>
+            </div>
+
+            <!-- Feedback Alerts -->
+            <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
+            <div th:if="${successMessage}" class="alert alert-success" th:text="${successMessage}"></div>
+
+            <!-- Portal Credentials Guide -->
+            <div id="adminNotice" class="portal-notice" style="display: none;">
+                <div>
+                    <strong>Administrator Account:</strong><br/>
+                    Username: <code>admin</code> &bull; Password: <code>admin123</code>
+                </div>
+                <button type="button" class="portal-notice-btn" onclick="applyCredentials('admin', 'admin123')">Auto-Fill</button>
+            </div>
+
+            <div id="patientNotice" class="portal-notice" style="display: none;">
+                <div>
+                    <strong>Patient Account (Rahul Sharma):</strong><br/>
+                    Username: <code>rahul.s</code> &bull; Password: <code>patient123</code>
+                </div>
+                <button type="button" class="portal-notice-btn" onclick="applyCredentials('rahul.s', 'patient123')">Auto-Fill</button>
+            </div>
+
+            <div id="doctorNotice" class="portal-notice" style="display: none;">
+                <div>
+                    <strong>Staff Doctor (Dr. Rajesh Sharma, MD):</strong><br/>
+                    Username: <code>dr.sharma</code> &bull; Password: <code>doctor123</code>
+                </div>
+                <button type="button" class="portal-notice-btn" onclick="applyCredentials('dr.sharma', 'doctor123')">Auto-Fill</button>
+            </div>
+
+            <!-- Login Form -->
+            <form th:action="@{/login}" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+
+                <div class="form-group">
+                    <label for="username">Username / ID</label>
+                    <input type="text" id="username" name="username" class="form-control" placeholder="Enter username" required autofocus />
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" class="form-control" placeholder="Enter password" required />
+                </div>
+
+                <button type="submit" id="submitBtn" class="btn btn-primary" style="width: 100%; margin-top: 0.75rem; padding: 0.75rem; font-size: 0.95rem;">
+                    Sign In to Admin Portal
+                </button>
+            </form>
+
+            <!-- Bottom Context Links -->
+            <div id="patientRegisterBox" style="border-top: 1px solid var(--border); margin-top: 1.5rem; padding-top: 1.25rem; text-align: center; display: none;">
+                <p style="font-size: 0.9rem; color: var(--text-muted);">
+                    New to CarePulse? 
+                    <a th:href="@{/register}" style="color: var(--primary); font-weight: 700; text-decoration: none;">
+                        Register for Patient Portal &rarr;
+                    </a>
+                </p>
+            </div>
+
+            <div id="adminHelpBox" style="border-top: 1px solid var(--border); margin-top: 1.5rem; padding-top: 1.25rem; text-align: center;">
+                <p style="font-size: 0.8rem; color: var(--text-muted);">
+                    The Admin Portal grants management of doctors, patient medical histories, clinical departments, and appointments.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script th:inline="javascript">
+        const initialPortal = /*[[${selectedPortal}]]*/ 'admin';
+
+        function selectPortal(portal) {
+            // Update buttons
+            document.getElementById('btnAdminPortal').classList.toggle('active', portal === 'admin');
+            document.getElementById('btnPatientPortal').classList.toggle('active', portal === 'patient');
+            document.getElementById('btnDoctorPortal').classList.toggle('active', portal === 'doctor');
+
+            // Update notices
+            document.getElementById('adminNotice').style.display = (portal === 'admin') ? 'flex' : 'none';
+            document.getElementById('patientNotice').style.display = (portal === 'patient') ? 'flex' : 'none';
+            document.getElementById('doctorNotice').style.display = (portal === 'doctor') ? 'flex' : 'none';
+
+            // Update bottom boxes
+            document.getElementById('patientRegisterBox').style.display = (portal === 'patient') ? 'block' : 'none';
+            document.getElementById('adminHelpBox').style.display = (portal === 'admin') ? 'block' : 'none';
+
+            // Update labels
+            const heading = document.getElementById('portalHeading');
+            const sub = document.getElementById('portalSubheading');
+            const submitBtn = document.getElementById('submitBtn');
+
+            if (portal === 'admin') {
+                heading.textContent = '🛡️ Administrator Portal';
+                sub.textContent = 'Hospital administration, staff directory & operational records';
+                submitBtn.textContent = 'Sign In to Admin Portal';
+            } else if (portal === 'patient') {
+                heading.textContent = '👤 Patient Health Portal';
+                sub.textContent = 'Book appointments, view prescriptions & clinical health history';
+                submitBtn.textContent = 'Sign In to Patient Portal';
+            } else if (portal === 'doctor') {
+                heading.textContent = '🩺 Physician Medical Workspace';
+                sub.textContent = 'Patient consultations, clinical notes & electronic prescriptions';
+                submitBtn.textContent = 'Sign In to Doctor Portal';
+            }
+        }
+
+        function applyCredentials(user, pass) {
+            document.getElementById('username').value = user;
+            document.getElementById('password').value = pass;
+            document.getElementById('username').focus();
+        }
+
+        // Initialize portal on load
+        document.addEventListener('DOMContentLoaded', () => {
+            selectPortal(initialPortal || 'admin');
+        });
+    </script>
+    <script th:src="@{/script.js}"></script>
+</body>
+</html>

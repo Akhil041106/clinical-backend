@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CarePulse - Clinic Administration Console</title>
+    <link rel="stylesheet" th:href="@{/style.css}">
+</head>
+<body>
+    <!-- Top Healthcare Navigation Bar -->
+    <header class="navbar">
+        <a th:href="@{/admin}" class="brand">
+            <div class="brand-icon">🏥</div>
+            <span>CarePulse Administration</span>
+        </a>
+        <div class="nav-user">
+            <span class="user-badge">🛡️ Administrator: Vikram Malhotra</span>
+            <a th:href="@{/login?portal=patient}" class="btn btn-outline btn-sm">👤 Patient Portal</a>
+            <a th:href="@{/h2-console}" target="_blank" class="btn btn-outline btn-sm">Database Console</a>
+            <form th:action="@{/logout}" method="post" style="display:inline;">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                <button type="submit" class="btn-logout">Logout</button>
+            </form>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Page Header -->
+        <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1rem;">
+            <div>
+                <h1 class="page-title">Hospital Management & Operations</h1>
+                <p class="page-subtitle">Oversee medical staff, patient registries, diagnostic test reports, and appointment billing (INR ₹)</p>
+            </div>
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                <button type="button" class="btn btn-outline" onclick="openModal('addDepartmentModal')">+ Add Specialty</button>
+                <button type="button" class="btn btn-outline" onclick="openModal('addTestReportModal')">🔬 + Add Lab Report</button>
+                <button type="button" class="btn btn-primary" onclick="openModal('addDoctorModal')">+ Onboard Doctor</button>
+            </div>
+        </div>
+
+        <!-- Success/Error Feedback -->
+        <div th:if="${successMessage}" class="alert alert-success" th:text="${successMessage}"></div>
+        <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
+
+        <!-- Tab Navigation Bar -->
+        <nav class="tab-navigation">
+            <button type="button" class="tab-link active" data-tab="tab-overview">📊 Operations Overview</button>
+            <button type="button" class="tab-link" data-tab="tab-doctors">🩺 Medical Personnel (<span th:text="${totalDoctors}">0</span>)</button>
+            <button type="button" class="tab-link" data-tab="tab-patients">👥 Patient Registry (<span th:text="${totalPatients}">0</span>)</button>
+            <button type="button" class="tab-link" data-tab="tab-appointments">📅 Appointment Schedule (<span th:text="${totalAppointments}">0</span>)</button>
+            <button type="button" class="tab-link" data-tab="tab-reports">🔬 Diagnostic Lab Reports (<span th:text="${testReports.size()}">0</span>)</button>
+            <button type="button" class="tab-link" data-tab="tab-departments">🏢 Clinical Specialties (<span th:text="${departments.size()}">0</span>)</button>
+        </nav>
+
+        <!-- TAB 1: OPERATIONS OVERVIEW -->
+        <section id="tab-overview" class="tab-pane active">
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-icon icon-teal">👨‍⚕️</div>
+                    <div>
+                        <div class="stat-val" th:text="${totalDoctors}">0</div>
+                        <div class="stat-label">Active Physicians</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon icon-blue">👥</div>
+                    <div>
+                        <div class="stat-val" th:text="${totalPatients}">0</div>
+                        <div class="stat-label">Enrolled Patients</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon icon-amber">⏳</div>
+                    <div>
+                        <div class="stat-val" th:text="${pendingCount}">0</div>
+                        <div class="stat-label">Pending Confirmations</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon icon-emerald">🔬</div>
+                    <div>
+                        <div class="stat-val" th:text="${totalReportsCount}">0</div>
+                        <div class="stat-label">Lab Reports Issued</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon icon-purple">₹</div>
+                    <div>
+                        <div class="stat-val" th:text="'₹' + ${totalRevenue}">₹0.00</div>
+                        <div class="stat-label">Realized Revenue (INR)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Urgent Queue: Pending Action Table -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">⚠️ Appointments Requiring Immediate Review</h2>
+                    <span class="badge badge-pending" th:text="${pendingCount} + ' Pending'">0 Pending</span>
+                </div>
+                <div class="panel-body table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Appt ID</th>
+                                <th>Patient Name</th>
+                                <th>Attending Doctor</th>
+                                <th>Date & Time</th>
+                                <th>Chief Complaint</th>
+                                <th>Fee & Payment</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="appt : ${appointments}" th:if="${appt.status == 'PENDING'}">
+                                <td th:text="'#' + ${appt.id}">#1</td>
+                                <td>
+                                    <strong th:text="${appt.patient.user.fullName}">Patient</strong><br/>
+                                    <small style="color: var(--text-muted);" th:text="${appt.patient.contactNumber}">Phone</small>
+                                </td>
+                                <td>
+                                    <span th:text="${appt.doctor.user.fullName}">Dr. Name</span><br/>
+                                    <small style="color: var(--text-muted);" th:text="${appt.doctor.department.name}">Dept</small>
+                                </td>
+                                <td>
+                                    <span th:text="${appt.appointmentDate}">2026-10-12</span><br/>
+                                    <small style="color: var(--text-muted);" th:text="${appt.appointmentTime}">10:00</small>
+                                </td>
+                                <td th:text="${appt.reason}">Reason</td>
+                                <td>
+                                    <strong style="color: var(--primary);" th:text="'₹' + ${appt.feeAmount != null ? appt.feeAmount : appt.doctor.consultationFee}">₹500</strong><br/>
+                                    <span th:class="'badge ' + (${appt.paymentStatus == 'PAID'} ? 'badge-paid' : 'badge-unpaid')"
+                                          th:text="${appt.paymentStatus} + (${appt.paymentMethod != null} ? ' via ' + ${appt.paymentMethod} : '')">PENDING</span>
+                                </td>
+                                <td>
+                                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                        <form th:action="@{'/appointments/' + ${appt.id} + '/approve'}" method="post" style="display:inline;">
+                                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                                            <button type="submit" class="btn btn-primary btn-sm">Confirm</button>
+                                        </form>
+                                        <button th:if="${appt.paymentStatus != 'PAID'}"
+                                                type="button"
+                                                class="btn btn-outline btn-sm"
+                                                style="color: var(--success); border-color: var(--success);"
+                                                th:data-id="${appt.id}"
+                                                th:data-title="'Consultation: Dr. ' + ${appt.doctor.user.fullName}"
+                                                th:data-amount="${appt.feeAmount != null ? appt.feeAmount : appt.doctor.consultationFee}"
+                                                th:data-action="@{'/appointments/' + ${appt.id} + '/pay'}"
+                                                onclick="openPaymentModal('appointment', this.getAttribute('data-id'), this.getAttribute('data-title'), this.getAttribute('data-amount'), this.getAttribute('data-action'))">
+                                            Collect ₹<span th:text="${appt.feeAmount != null ? appt.feeAmount : appt.doctor.consultationFee}">500</span>
+                                        </button>
+                                        <form th:action="@{'/appointments/' + ${appt.id} + '/cancel'}" method="post" style="display:inline;" onsubmit="return confirmAction('Decline this appointment?');">
+                                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                                            <button type="submit" class="btn btn-outline btn-sm" style="color: var(--danger);">Decline</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr th:if="${pendingCount == 0}">
+                                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">
+                                    ✓ All pending appointments have been reviewed!
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: MEDICAL PERSONNEL -->
+        <section id="tab-doctors" class="tab-pane">
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Active Clinical Doctors & Specialists</h2>
+                    <div class="search-bar">
+                        <span>🔍</span>
+                        <input type="text" id="doctorSearchInput" placeholder="Search doctor, department, specialty..." onkeyup="filterTable('doctorSearchInput', 'doctorsTable')" />
+                    </div>
+                </div>
+                <div class="panel-body table-responsive">
+                    <table id="doctorsTable">
+                        <thead>
+                            <tr>
+                                <th>Doctor Name</th>
+                                <th>Clinical Department</th>
+                                <th>Specialization</th>
+                                <th>Qualifications</th>
+                                <th>Experience</th>
+                                <th>Phone Contact</th>
+                                <th>Consultation Fee (₹)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="doc : ${doctors}">
+                                <td>
+                                    <strong th:text="${doc.user.fullName}">Dr. Name</strong><br/>
+                                    <small style="color: var(--text-muted);" th:text="${doc.user.email}">email</small>
+                                </td>
+                                <td>
+                                    <span class="user-badge" th:text="${doc.department.name}">Specialty</span>
+                                </td>
+                                <td th:text="${doc.specialization}">Specialization</td>
+                                <td th:text="${doc.qualifications}">Qualifications</td>
+                                <td th:text="${doc.experienceYears} + ' years'">0 years</td>
+                                <td th:text="${doc.phone}">Phone</td>
+                                <td><strong style="color: var(--primary);" th:text="'₹' + ${doc.consultationFee}">₹500.00</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: PATIENT REGISTRY -->
+        <section id="tab-patients" class="tab-pane">
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Enrolled Patient Medical Records</h2>
+                    <div class="search-bar">
+                        <span>🔍</span>
+                        <input type="text" id="patientSearchInput" placeholder="Search patient by name, phone, allergy..." onkeyup="filterTable('patientSearchInput', 'patientsTable')" />
+                    </div>
+                </div>
+                <div class="panel-body table-responsive">
+                    <table id="patientsTable">
+                        <thead>
+                            <tr>
+                                <th>Patient Name</th>
+                                <th>DOB / Gender</th>
+                                <th>Blood Type</th>
+                                <th>Contact Information</th>
+                                <th>Emergency Contact</th>
+                                <th>Known Allergies</th>
+                                <th>Medical Background</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="pat : ${patients}">
+                                <td>
+                                    <strong th:text="${pat.user.fullName}">Patient Name</strong><br/>
+                                    <small style="color: var(--text-muted);" th:text="${pat.user.email}">email</small>
+                                </td>
+                                <td>
+                                    <span th:text="${pat.gender}">Gender</span><br/>
+                                    <small style="color: var(--text-muted);" th:text="${pat.dateOfBirth}">DOB</small>
+                                </td>
+                                <td>
+                                    <span class="badge badge-pending" th:text="${pat.bloodGroup != null ? pat.bloodGroup : 'Unknown'}">B+</span>
+                                </td>
+                                <td>
+                                    <span th:text="${pat.contactNumber}">Phone</span><br/>
+                                    <small style="color: var(--text-muted);" th:text="${pat.address}">Address</small>
+                                </td>
+                                <td th:text="${pat.emergencyContact}">Emergency Contact</td>
+                                <td>
+                                    <span th:if="${pat.allergies != null && !pat.allergies.isEmpty()}" style="color: #b91c1c; font-weight: 600;" th:text="'⚠️ ' + ${pat.allergies}">Allergies</span>
+                                    <span th:if="${pat.allergies == null || pat.allergies.isEmpty()}" style="color: var(--text-muted);">None reported</span>
+                                </td>
+                                <td>
+                                    <span th:if="${pat.medicalHistory != null && !pat.medicalHistory.isEmpty()}" th:text="${pat.medicalHistory}">History</span>
+                                    <span th:if="${pat.medicalHistory == null || pat.medicalHistory.isEmpty()}" style="color: var(--text-muted);">No records</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: APPOINTMENTS CONTROL -->
+        <section id="tab-appointments" class="tab-pane">
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Clinic-Wide Appointments Master Schedule</h2>
+                    <div class="filter-pills">
+                        <button type="button" class="filter-pill active" onclick="filterAppointmentsByStatus('ALL', this)">All</button>
+                        <button type="button" class="filter-pill" onclick="filterAppointmentsByStatus('PENDING', this)">Pending</button>
+                        <button type="button" class="filter-pill" onclick="filterAppointmentsByStatus('APPROVED', this)">Approved</button>
+                        <button type="button" class="filter-pill" onclick="filterAppointmentsByStatus('COMPLETED', this)">Completed</button>
+                        <button type="button" class="filter-pill" onclick="filterAppointmentsByStatus('CANCELLED', this)">Cancelled</button>
+                    </div>
+                </div>
+                <div class="panel-body table-responsive">
+                    <table id="appointmentsMasterTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Patient Name</th>
+                                <th>Physician</th>
+                                <th>Specialty</th>
+                                <th>Schedule Date & Time</th>
+                                <th>Fee & Payment</th>
+                                <th>Visit Status</th>
+                                <th>Administrative Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="appt : ${appointments}" class="appointment-row" th:data-status="${appt.status}">
+                                <td th:text="'#' + ${appt.id}">#1</td>
+                                <td>
+                                    <strong th:text="${appt.patient.user.fullName}">Patient</strong><br/>
+                                    <small style="color: var(--text-muted);" th:text="${appt.patient.contactNumber}">Phone</small>
+                                </td>
+                                <td th:text="${appt.doctor.user.fullName}">Doctor</td>
+                                <td><span class="user-badge" th:text="${appt.doctor.department.name}">Dept</span></td>
+                                <td>
+                                    <span th:text="${appt.appointmentDate}">Date</span><br/>
+                                    <small style="color: var(--text-muted);" th:text="${appt.appointmentTime}">Time</small>
+                                </td>
+                                <td>
+                                    <strong style="color: var(--primary);" th:text="'₹' + ${appt.feeAmount != null ? appt.feeAmount : appt.doctor.consultationFee}">₹500</strong><br/>
+                                    <span th:class="'badge ' + (${appt.paymentStatus == 'PAID'} ? 'badge-paid' : 'badge-unpaid')"
+                                          th:text="${appt.paymentStatus} + (${appt.paymentMethod != null} ? ' via ' + ${appt.paymentMethod} : '')">PAID</span>
+                                </td>
+                                <td>
+                                    <span th:class="'badge badge-' + ${#strings.toLowerCase(appt.status)}" th:text="${appt.status}">STATUS</span>
+                                </td>
+                                <td>
+                                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                        <form th:if="${appt.status == 'PENDING'}" th:action="@{'/appointments/' + ${appt.id} + '/approve'}" method="post" style="display:inline;">
+                                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                                            <button type="submit" class="btn btn-primary btn-sm">Approve</button>
+                                        </form>
+                                        <button th:if="${appt.paymentStatus != 'PAID'}"
+                                                type="button"
+                                                class="btn btn-outline btn-sm"
+                                                style="color: var(--success); border-color: var(--success);"
+                                                th:data-id="${appt.id}"
+                                                th:data-title="'Consultation: Dr. ' + ${appt.doctor.user.fullName}"
+                                                th:data-amount="${appt.feeAmount != null ? appt.feeAmount : appt.doctor.consultationFee}"
+                                                th:data-action="@{'/appointments/' + ${appt.id} + '/pay'}"
+                                                onclick="openPaymentModal('appointment', this.getAttribute('data-id'), this.getAttribute('data-title'), this.getAttribute('data-amount'), this.getAttribute('data-action'))">
+                                            Collect ₹<span th:text="${appt.feeAmount != null ? appt.feeAmount : appt.doctor.consultationFee}">500</span>
+                                        </button>
+                                        <form th:if="${appt.status == 'PENDING' or appt.status == 'APPROVED'}" th:action="@{'/appointments/' + ${appt.id} + '/cancel'}" method="post" style="display:inline;" onsubmit="return confirmAction('Cancel this appointment?');">
+                                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                                            <button type="submit" class="btn btn-outline btn-sm" style="color: var(--danger);">Cancel</button>
+                                        </form>
+                                        <span th:if="${appt.status == 'COMPLETED'}" style="color: var(--success); font-size: 0.85rem; font-weight: 600;">✓ Completed</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 5: DIAGNOSTIC LAB REPORTS -->
+        <section id="tab-reports" class="tab-pane">
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">🔬 Diagnostic & Clinical Laboratory Test Reports</h2>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="openModal('addTestReportModal')">+ Issue New Lab Report</button>
+                </div>
+                <div class="panel-body table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Ref ID</th>
+                                <th>Patient Name</th>
+                                <th>Test Name & Category</th>
+                                <th>Referred Doctor</th>
+                                <th>Test Date</th>
+                                <th>Result Finding</th>
+                                <th>Charges & Payment</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="r : ${testReports}">
+                                <td>
+                                    <strong th:text="${r.labReferenceNumber}">LAB-001</strong><br/>
+                                    <span th:class="'badge ' + (${r.status == 'NORMAL'} ? 'badge-normal' : 'badge-abnormal')" th:text="${r.status}">NORMAL</span>
+                                </td>
+                                <td>
+                                    <strong th:text="${r.patient.user.fullName}">Patient Name</strong><br/>
+                                    <small style="color: var(--text-muted);" th:text="${r.patient.contactNumber}">Phone</small>
+                                </td>
+                                <td>
+                                    <strong th:text="${r.testName}">Complete Blood Count</strong><br/>
+                                    <span class="user-badge" th:text="${r.testCategory}">Pathology</span>
+                                </td>
+                                <td th:text="${r.doctor.user.fullName}">Dr. Name</td>
+                                <td th:text="${r.testDate}">2026-10-10</td>
+                                <td>
+                                    <small style="white-space: pre-line; display: block; max-width: 320px; font-family: monospace;" th:text="${#strings.abbreviate(r.testResult, 120)}">Results</small>
+                                </td>
+                                <td>
+                                    <strong style="color: var(--primary);" th:text="'₹' + ${r.testFee}">₹450</strong><br/>
+                                    <span th:class="'badge ' + (${r.paymentStatus == 'PAID'} ? 'badge-paid' : 'badge-unpaid')"
+                                          th:text="${r.paymentStatus} + (${r.paymentMethod != null} ? ' via ' + ${r.paymentMethod} : '')">PAID</span>
+                                </td>
+                                <td>
+                                    <button th:if="${r.paymentStatus != 'PAID'}"
+                                            type="button"
+                                            class="btn btn-outline btn-sm"
+                                            style="color: var(--success); border-color: var(--success);"
+                                            th:data-id="${r.id}"
+                                            th:data-title="'Lab Test: ' + ${r.testName} + ' (' + ${r.labReferenceNumber} + ')'"
+                                            th:data-amount="${r.testFee}"
+                                            th:data-action="@{'/admin/testreport/' + ${r.id} + '/pay'}"
+                                            onclick="openPaymentModal('testreport', this.getAttribute('data-id'), this.getAttribute('data-title'), this.getAttribute('data-amount'), this.getAttribute('data-action'))">
+                                        Collect ₹<span th:text="${r.testFee}">450</span>
+                                    </button>
+                                    <span th:if="${r.paymentStatus == 'PAID'}" style="color: var(--success); font-weight: 600; font-size: 0.85rem;">✓ Paid</span>
+                                </td>
+                            </tr>
+                            <tr th:if="${#lists.isEmpty(testReports)}">
+                                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">
+                                    No lab reports recorded. Click "+ Issue New Lab Report" to add diagnostic results.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 6: DEPARTMENTS & SPECIALTIES -->
+        <section id="tab-departments" class="tab-pane">
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Clinical Specialties & Hospital Units</h2>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="openModal('addDepartmentModal')">+ Add Specialty</button>
+                </div>
+                <div class="panel-body table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Department / Specialty</th>
+                                <th>Clinical Scope & Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="dept : ${departments}">
+                                <td>
+                                    <strong style="font-size: 1rem;" th:text="${dept.name}">Department Name</strong>
+                                </td>
+                                <td th:text="${dept.description}">Description</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal: Onboard Doctor -->
+    <div id="addDoctorModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Onboard Licensed Medical Physician</h3>
+                <button type="button" class="modal-close" onclick="closeModal('addDoctorModal')">&times;</button>
+            </div>
+            <form th:action="@{/admin/doctor/add}" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Doctor Full Name *</label>
+                        <input type="text" name="fullName" class="form-control" placeholder="Dr. Vikram Sen, MD" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Portal Username *</label>
+                        <input type="text" name="username" class="form-control" placeholder="dr.sen" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Initial Password *</label>
+                        <input type="password" name="password" class="form-control" placeholder="••••••••" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Email Address *</label>
+                        <input type="email" name="email" class="form-control" placeholder="dr.sen@carepulse.clinic" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Assigned Specialty Department *</label>
+                        <select name="departmentId" class="form-control" required>
+                            <option value="">Select Specialty</option>
+                            <option th:each="d : ${departments}" th:value="${d.id}" th:text="${d.name}"></option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Clinical Specialization *</label>
+                        <input type="text" name="specialization" class="form-control" placeholder="e.g. Pediatric Cardiology" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Credentials & Medical School</label>
+                        <input type="text" name="qualifications" class="form-control" placeholder="e.g. MBBS, MD - AIIMS New Delhi" />
+                    </div>
+                    <div class="form-group">
+                        <label>Years of Clinical Experience</label>
+                        <input type="number" name="experienceYears" class="form-control" min="0" value="7" />
+                    </div>
+                    <div class="form-group">
+                        <label>Direct Phone Contact</label>
+                        <input type="text" name="phone" class="form-control" placeholder="+91 98000 00000" />
+                    </div>
+                    <div class="form-group">
+                        <label>Consultation Fee (₹) *</label>
+                        <input type="number" step="0.01" name="consultationFee" class="form-control" value="600.00" required />
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('addDoctorModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Complete Physician Onboarding</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Add Department -->
+    <div id="addDepartmentModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Establish Clinical Specialty Department</h3>
+                <button type="button" class="modal-close" onclick="closeModal('addDepartmentModal')">&times;</button>
+            </div>
+            <form th:action="@{/admin/department/add}" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+
+                <div class="form-group">
+                    <label>Department / Specialty Name *</label>
+                    <input type="text" name="name" class="form-control" placeholder="e.g. Dermatology & Cosmetology" required />
+                </div>
+                <div class="form-group">
+                    <label>Description & Clinical Scope</label>
+                    <textarea name="description" class="form-control" placeholder="Diagnostics, skin treatments, procedures, and care..."></textarea>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('addDepartmentModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Department</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Add Diagnostic Test Report -->
+    <div id="addTestReportModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 680px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Record Diagnostic Laboratory Test Report</h3>
+                <button type="button" class="modal-close" onclick="closeModal('addTestReportModal')">&times;</button>
+            </div>
+            <form th:action="@{/admin/testreport/add}" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Patient *</label>
+                        <select name="patientId" class="form-control" required>
+                            <option value="">Select Patient</option>
+                            <option th:each="p : ${patients}" th:value="${p.id}" th:text="${p.user.fullName} + ' (' + ${p.contactNumber} + ')'"></option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Referring Doctor *</label>
+                        <select name="doctorId" class="form-control" required>
+                            <option value="">Select Doctor</option>
+                            <option th:each="d : ${doctors}" th:value="${d.id}" th:text="${d.user.fullName} + ' (' + ${d.department.name} + ')'"></option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Test Name *</label>
+                        <input type="text" name="testName" class="form-control" placeholder="e.g. Complete Blood Count (CBC) or ECG" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Category *</label>
+                        <select name="testCategory" class="form-control" required>
+                            <option value="Pathology">Pathology</option>
+                            <option value="Radiology">Radiology</option>
+                            <option value="Biochemistry">Biochemistry</option>
+                            <option value="Cardiology">Cardiology</option>
+                            <option value="Microbiology">Microbiology</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Test Date *</label>
+                        <input type="date" name="testDate" class="form-control" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Lab Reference Number</label>
+                        <input type="text" name="labReferenceNumber" class="form-control" placeholder="e.g. LAB-2026-9081" />
+                    </div>
+                    <div class="form-group">
+                        <label>Diagnostic Status *</label>
+                        <select name="status" class="form-control" required>
+                            <option value="NORMAL">NORMAL</option>
+                            <option value="ABNORMAL">ABNORMAL</option>
+                            <option value="PENDING">PENDING</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Test Fee (₹) *</label>
+                        <input type="number" step="0.01" name="testFee" class="form-control" value="500.00" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Payment Status *</label>
+                        <select name="paymentStatus" class="form-control" required>
+                            <option value="PAID">PAID</option>
+                            <option value="PENDING">PENDING</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label>Biological Reference Range</label>
+                        <input type="text" name="normalRange" class="form-control" placeholder="e.g. Normal reference values for adult males/females" />
+                    </div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label>Detailed Clinical Test Results *</label>
+                        <textarea name="testResult" class="form-control" style="min-height: 90px; font-family: monospace;" placeholder="Parameter: Result (Biological Interval)&#10;Parameter: Result (Biological Interval)" required></textarea>
+                    </div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label>Pathologist / Radiologist Remarks</label>
+                        <textarea name="remarks" class="form-control" placeholder="Clinical impression, recommendations, or note..."></textarea>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('addTestReportModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Diagnostic Report</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- CarePulse Express Checkout & Payment Modal -->
+    <div id="paymentModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 580px;">
+            <div class="modal-header">
+                <h3 class="modal-title">💳 CarePulse Clinical Fee Collection</h3>
+                <button type="button" class="modal-close" onclick="closeModal('paymentModal')">&times;</button>
+            </div>
+
+            <!-- Bill Overview Banner -->
+            <div class="bill-summary-banner">
+                <div>
+                    <div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.9;">Total Collection Amount</div>
+                    <div id="paymentBillAmount" class="bill-amount-display">₹ 0.00</div>
+                    <div id="paymentBillTitle" style="font-size: 0.85rem; opacity: 0.9; margin-top: 0.2rem;">Medical Consultation Fee</div>
+                </div>
+                <div style="text-align: right; font-size: 0.8rem; opacity: 0.85;">
+                    <div>🔒 Hospital Accounts</div>
+                    <div>Instant Receipt</div>
+                </div>
+            </div>
+
+            <!-- Payment Method Tabs -->
+            <div class="payment-tabs">
+                <button type="button" class="payment-tab-btn active" data-channel="upi" onclick="selectPaymentChannel('upi')">
+                    📱 UPI / QR Code
+                </button>
+                <button type="button" class="payment-tab-btn" data-channel="netbanking" onclick="selectPaymentChannel('netbanking')">
+                    🏦 Net Banking
+                </button>
+                <button type="button" class="payment-tab-btn" data-channel="cash" onclick="selectPaymentChannel('cash')">
+                    💵 Hospital Cash Desk
+                </button>
+            </div>
+
+            <!-- FORM -->
+            <form id="paymentGatewayForm" method="post" action="">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                <input type="hidden" id="paymentMethodInput" name="paymentMethod" value="UPI" />
+
+                <!-- 1. UPI CHANNEL PANE -->
+                <div id="channel-upi" class="payment-channel-pane active">
+                    <div class="qr-box">
+                        <img id="paymentUpiQr" class="qr-img" src="" alt="Scan UPI QR Code" />
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.4rem;">Present QR code to patient to scan via GPay / PhonePe / Paytm / BHIM</div>
+                        <div class="upi-id-badge">
+                            <span>carepulse.billing@okhdfcbank</span>
+                            <button type="button" class="copy-btn" onclick="copyText('carepulse.billing@okhdfcbank', this)">Copy</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="upiTxnRef">UPI Transaction Ref / 12-Digit UTR (Optional)</label>
+                        <input type="text" id="upiTxnRef" name="transactionReference" class="form-control" placeholder="e.g. 423987112045 or UPI Reference" />
+                        <small style="color: var(--text-muted); font-size: 0.8rem;">Enter reference number from patient's UPI payment confirmation</small>
+                    </div>
+                </div>
+
+                <!-- 2. NET BANKING CHANNEL PANE -->
+                <div id="channel-netbanking" class="payment-channel-pane">
+                    <div class="bank-details-card">
+                        <div style="font-size: 0.8rem; font-weight: 700; color: var(--primary); text-transform: uppercase; margin-bottom: 0.6rem;">
+                            CarePulse Hospital Official Beneficiary Account:
+                        </div>
+                        <div class="bank-row">
+                            <span style="color: var(--text-muted);">Account Name:</span>
+                            <strong>CarePulse Healthcare Pvt Ltd</strong>
+                        </div>
+                        <div class="bank-row">
+                            <span style="color: var(--text-muted);">Bank Name:</span>
+                            <strong>HDFC Bank</strong>
+                        </div>
+                        <div class="bank-row">
+                            <span style="color: var(--text-muted);">Account Number:</span>
+                            <span>
+                                <code style="font-size: 0.95rem; font-weight: 700;">50200084729104</code>
+                                <button type="button" class="copy-btn" onclick="copyText('50200084729104', this)">Copy</button>
+                            </span>
+                        </div>
+                        <div class="bank-row">
+                            <span style="color: var(--text-muted);">IFSC Code:</span>
+                            <span>
+                                <code style="font-size: 0.95rem; font-weight: 700;">HDFC0001234</code>
+                                <button type="button" class="copy-btn" onclick="copyText('HDFC0001234', this)">Copy</button>
+                            </span>
+                        </div>
+                        <div class="bank-row">
+                            <span style="color: var(--text-muted);">Branch:</span>
+                            <span>Indiranagar Branch, Bengaluru - 560038</span>
+                        </div>
+                        <div class="bank-row">
+                            <span style="color: var(--text-muted);">Account Type:</span>
+                            <span>Current Account</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="bankTxnRef">NEFT / RTGS / IMPS Reference Number *</label>
+                        <input type="text" id="bankTxnRef" name="transactionReference" class="form-control" placeholder="e.g. HDFCN2609817203" />
+                        <small style="color: var(--text-muted); font-size: 0.8rem;">Enter bank transfer reference number to reconcile billing</small>
+                    </div>
+                </div>
+
+                <!-- 3. CASH DESK CHANNEL PANE -->
+                <div id="channel-cash" class="payment-channel-pane">
+                    <div class="counter-desk-box">
+                        <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 0.35rem;">💵 Hospital OPD Cash Counter Collection</div>
+                        <p style="font-size: 0.85rem; line-height: 1.5; margin: 0;">
+                            Collect physical cash payment at <strong>Counter #2 or #3</strong> in the OPD Billing Reception and verify currency notes before completing transaction.
+                        </p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cashReceiptRef">Cashier Slip / Counter Receipt # (Optional)</label>
+                        <input type="text" id="cashReceiptRef" name="transactionReference" class="form-control" placeholder="e.g. CASH-OPD-7812" />
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.25rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('paymentModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: #16a34a; border-color: #16a34a; padding: 0.65rem 1.75rem;">
+                        ✓ Confirm Collection (<span id="paymentBtnAmount">₹ 0.00</span>)
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script th:src="@{/script.js}"></script>
+</body>
+</html>

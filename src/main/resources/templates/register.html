@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient Registration - CarePulse Clinical Management System</title>
+    <link rel="stylesheet" th:href="@{/style.css}">
+</head>
+<body>
+    <div class="auth-wrapper">
+        <div class="auth-card" style="max-width: 680px;">
+            <div class="auth-header">
+                <div class="brand" style="justify-content: center; margin-bottom: 0.75rem;">
+                    <div class="brand-icon">+</div>
+                    <span>CarePulse Clinic</span>
+                </div>
+                <h2 style="font-size: 1.4rem; color: var(--text-main);">Patient Self-Registration</h2>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">Create your patient account to book appointments and view medical records</p>
+            </div>
+
+            <!-- Error Banner -->
+            <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
+
+            <form th:action="@{/register}" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+
+                <h4 style="margin-bottom: 0.75rem; color: var(--primary); font-size: 0.95rem; text-transform: uppercase;">1. Account Details</h4>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="fullName">Full Name *</label>
+                        <input type="text" id="fullName" name="fullName" class="form-control" th:value="${fullName}" placeholder="e.g. Pooja Sharma" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="username">Username *</label>
+                        <input type="text" id="username" name="username" class="form-control" th:value="${username}" placeholder="e.g. pooja.s" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email Address *</label>
+                        <input type="email" id="email" name="email" class="form-control" th:value="${email}" placeholder="pooja.s@example.com" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password *</label>
+                        <input type="password" id="password" name="password" class="form-control" placeholder="••••••••" required />
+                    </div>
+                </div>
+
+                <h4 style="margin-top: 1.25rem; margin-bottom: 0.75rem; color: var(--primary); font-size: 0.95rem; text-transform: uppercase;">2. Patient Demographics & Medical Info</h4>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="dateOfBirth">Date of Birth</label>
+                        <input type="date" id="dateOfBirth" name="dateOfBirth" class="form-control" />
+                    </div>
+                    <div class="form-group">
+                        <label for="gender">Gender</label>
+                        <select id="gender" name="gender" class="form-control">
+                            <option value="">Select Gender</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="bloodGroup">Blood Group</label>
+                        <select id="bloodGroup" name="bloodGroup" class="form-control">
+                            <option value="">Select Blood Group</option>
+                            <option value="A+">A+</option>
+                            <option value="A-">A-</option>
+                            <option value="B+">B+</option>
+                            <option value="B-">B-</option>
+                            <option value="AB+">AB+</option>
+                            <option value="AB-">AB-</option>
+                            <option value="O+">O+</option>
+                            <option value="O-">O-</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="contactNumber">Contact Phone</label>
+                        <input type="text" id="contactNumber" name="contactNumber" class="form-control" th:value="${contactNumber}" placeholder="+91 98765 43210" />
+                    </div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label for="address">Residential Address</label>
+                        <input type="text" id="address" name="address" class="form-control" th:value="${address}" placeholder="e.g. 42 MG Road, Indiranagar, Bengaluru, Karnataka" />
+                    </div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label for="emergencyContact">Emergency Contact (Name & Phone)</label>
+                        <input type="text" id="emergencyContact" name="emergencyContact" class="form-control" placeholder="e.g. Ramesh Sharma (+91 98765 11111)" />
+                    </div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label for="medicalHistory">Past Medical History (Pre-existing Conditions)</label>
+                        <textarea id="medicalHistory" name="medicalHistory" class="form-control" placeholder="e.g. Asthma, Hypertension, previous surgeries..."></textarea>
+                    </div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label for="allergies">Known Allergies (Medications / Food)</label>
+                        <input type="text" id="allergies" name="allergies" class="form-control" placeholder="e.g. Penicillin, Peanuts, Sulfa drugs, None" />
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1.5rem; padding: 0.75rem;">
+                    Complete Registration
+                </button>
+            </form>
+
+            <div style="text-align: center; margin-top: 1.25rem; font-size: 0.9rem; color: var(--text-muted);">
+                Already registered? <a th:href="@{/login}" style="color: var(--primary); font-weight: 600; text-decoration: none;">Sign in here</a>
+            </div>
+        </div>
+    </div>
+
+    <script th:src="@{/script.js}"></script>
+</body>
+</html>

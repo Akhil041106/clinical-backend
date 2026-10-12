@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doctor Portal - CarePulse Clinical Management System</title>
+    <link rel="stylesheet" th:href="@{/style.css}">
+</head>
+<body>
+    <!-- Navbar -->
+    <header class="navbar">
+        <a th:href="@{/doctor}" class="brand">
+            <div class="brand-icon">🩺</div>
+            <span>CarePulse Physician Portal</span>
+        </a>
+        <div class="nav-user">
+            <span class="user-badge" th:text="'🩺 ' + ${doctor.user.fullName}">Dr. Name</span>
+            <form th:action="@{/logout}" method="post" style="display:inline;">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                <button type="submit" class="btn-logout">Logout</button>
+            </form>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Doctor Info Header -->
+        <div class="page-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h1 class="page-title" th:text="${doctor.user.fullName}">Dr. Name</h1>
+                <p class="page-subtitle" th:text="${doctor.specialization} + ' • ' + ${doctor.department.name} + ' • ' + ${doctor.qualifications}"></p>
+            </div>
+            <div>
+                <span class="user-badge" style="font-size: 1rem; padding: 0.5rem 1rem;" th:text="'Fee: ₹' + ${doctor.consultationFee}">Fee: ₹500.00</span>
+            </div>
+        </div>
+
+        <!-- Success/Error Feedback -->
+        <div th:if="${successMessage}" class="alert alert-success" th:text="${successMessage}"></div>
+        <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
+
+        <!-- Appointments Queue -->
+        <div class="panel">
+            <div class="panel-header">
+                <h2 class="panel-title">Your Clinical Schedule & Patient Appointments</h2>
+                <span class="badge badge-pending" th:text="${appointments.size()} + ' Scheduled'">0 Scheduled</span>
+            </div>
+            <div class="panel-body table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Patient Name</th>
+                            <th>Contact Phone</th>
+                            <th>Date & Time</th>
+                            <th>Reason / Symptoms</th>
+                            <th>Payment</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="appt : ${appointments}">
+                            <td th:text="'#' + ${appt.id}">#1</td>
+                            <td>
+                                <strong th:text="${appt.patient.user.fullName}">Patient Name</strong><br/>
+                                <small style="color: var(--text-muted);" th:text="'DOB: ' + ${appt.patient.dateOfBirth} + ' | Blood: ' + ${appt.patient.bloodGroup}">Details</small>
+                            </td>
+                            <td th:text="${appt.patient.contactNumber}">Phone</td>
+                            <td>
+                                <span th:text="${appt.appointmentDate}">2026-09-22</span><br/>
+                                <small style="color: var(--text-muted);" th:text="${appt.appointmentTime}">10:00</small>
+                            </td>
+                            <td th:text="${appt.reason}">Reason</td>
+                            <td>
+                                <div><strong>₹<span th:text="${appt.feeAmount != null ? appt.feeAmount : doctor.consultationFee}">500.00</span></strong></div>
+                                <span th:class="'badge ' + (${appt.paymentStatus == 'PAID'} ? 'badge-paid' : 'badge-unpaid')"
+                                      th:text="${appt.paymentStatus} + (${appt.paymentMethod != null} ? ' via ' + ${appt.paymentMethod} : '')">PAID</span>
+                            </td>
+                            <td>
+                                <span th:class="'badge badge-' + ${#strings.toLowerCase(appt.status)}" th:text="${appt.status}">PENDING</span>
+                            </td>
+                            <td>
+                                <!-- Pending Actions -->
+                                <div style="display: flex; gap: 0.5rem;" th:if="${appt.status == 'PENDING'}">
+                                    <form th:action="@{'/doctor/appointment/' + ${appt.id} + '/status'}" method="post" style="display:inline;">
+                                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                                        <input type="hidden" name="status" value="APPROVED" />
+                                        <button type="submit" class="btn btn-primary btn-sm">Confirm</button>
+                                    </form>
+                                    <form th:action="@{'/doctor/appointment/' + ${appt.id} + '/status'}" method="post" style="display:inline;" onsubmit="return confirmAction('Decline this appointment?');">
+                                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                                        <input type="hidden" name="status" value="CANCELLED" />
+                                        <button type="submit" class="btn btn-outline btn-sm" style="color: var(--danger);">Decline</button>
+                                    </form>
+                                </div>
+
+                                <!-- Approved Actions: Ready for Consultation -->
+                                <div th:if="${appt.status == 'APPROVED'}">
+                                    <button type="button" class="btn btn-accent btn-sm"
+                                            th:data-id="${appt.id}"
+                                            th:data-patient="${appt.patient.user.fullName}"
+                                            th:data-reason="${appt.reason}"
+                                            onclick="openConsultationModal(this.getAttribute('data-id'), this.getAttribute('data-patient'), this.getAttribute('data-reason'))">
+                                        📝 Write Rx & Consult
+                                    </button>
+                                </div>
+
+                                <!-- Completed State -->
+                                <div th:if="${appt.status == 'COMPLETED'}">
+                                    <span style="color: var(--success); font-weight: 600; font-size: 0.85rem;">✓ Completed</span>
+                                </div>
+
+                                <!-- Cancelled State -->
+                                <div th:if="${appt.status == 'CANCELLED'}">
+                                    <span style="color: var(--text-muted); font-size: 0.85rem;">Cancelled</span>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(appointments)}">
+                            <td colspan="8" style="text-align: center; color: var(--text-muted);">No appointments found for your schedule.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Doctor's Completed Consultations History -->
+        <div class="panel">
+            <div class="panel-header">
+                <h2 class="panel-title">Completed Consultations & Digital Prescriptions</h2>
+                <span class="badge badge-completed" th:text="${consultations.size()} + ' Records'">0</span>
+            </div>
+            <div class="panel-body">
+                <div th:each="c : ${consultations}" class="record-card">
+                    <div class="record-meta">
+                        <span><strong>Patient:</strong> <span th:text="${c.patient.user.fullName}">Patient Name</span></span>
+                        <span th:text="${#temporals.format(c.consultationDate, 'yyyy-MM-dd HH:mm')}">Date</span>
+                    </div>
+                    <div class="record-diagnosis">
+                        <span>Diagnosis: </span><span th:text="${c.diagnosis}">Diagnosis</span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;" th:if="${c.vitalSigns != null && !c.vitalSigns.isEmpty()}">
+                        <strong>Vital Signs:</strong> <span th:text="${c.vitalSigns}">Vitals</span>
+                    </div>
+                    <div class="record-section-title">Rx Prescribed Medication:</div>
+                    <div class="record-text" th:text="${c.prescription}">Prescription details</div>
+                    <div th:if="${c.instructions != null && !c.instructions.isEmpty()}" style="margin-top: 0.5rem;">
+                        <div class="record-section-title">Patient Instructions:</div>
+                        <div class="record-text" th:text="${c.instructions}">Instructions</div>
+                    </div>
+                    <div th:if="${c.followUpDate != null}" style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--accent); font-weight: 600;">
+                        Follow-up Scheduled For: <span th:text="${c.followUpDate}">Date</span>
+                    </div>
+                </div>
+                <div th:if="${#lists.isEmpty(consultations)}" style="text-align: center; color: var(--text-muted); padding: 1rem;">
+                    No consultation notes recorded yet.
+                </div>
+            </div>
+        </div>
+
+        <!-- Advised Diagnostic Lab Reports -->
+        <div class="panel">
+            <div class="panel-header">
+                <h2 class="panel-title">🔬 Advised Diagnostic Lab Reports & Pathology Findings</h2>
+                <span class="badge badge-completed" th:text="${testReports.size()} + ' Lab Reports'">0 Lab Reports</span>
+            </div>
+            <div class="panel-body table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Ref #</th>
+                            <th>Patient Name</th>
+                            <th>Investigation</th>
+                            <th>Category</th>
+                            <th>Date</th>
+                            <th>Findings & Normal Range</th>
+                            <th>Status</th>
+                            <th>Fee (₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="r : ${testReports}">
+                            <td><code th:text="${r.labReferenceNumber}">REF-001</code></td>
+                            <td>
+                                <strong th:text="${r.patient.user.fullName}">Patient Name</strong>
+                            </td>
+                            <td th:text="${r.testName}">CBC</td>
+                            <td th:text="${r.testCategory}">Pathology</td>
+                            <td th:text="${r.testDate}">2026-10-10</td>
+                            <td>
+                                <div style="font-size: 0.85rem; font-family: monospace; white-space: pre-line; max-height: 80px; overflow-y: auto;" th:text="${r.testResult}">Result</div>
+                                <small style="color: var(--text-muted);" th:if="${r.normalRange != null}" th:text="'Ref: ' + ${r.normalRange}">Range</small>
+                            </td>
+                            <td>
+                                <span th:class="'badge ' + (${r.status == 'NORMAL'} ? 'badge-completed' : (${r.status == 'CRITICAL'} ? 'badge-cancelled' : 'badge-pending'))"
+                                      th:text="${r.status}">NORMAL</span>
+                            </td>
+                            <td>
+                                <strong>₹<span th:text="${r.testFee}">500.00</span></strong><br/>
+                                <span th:class="'badge ' + (${r.paymentStatus == 'PAID'} ? 'badge-paid' : 'badge-unpaid')"
+                                      th:text="${r.paymentStatus}">PAID</span>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(testReports)}">
+                            <td colspan="8" style="text-align: center; color: var(--text-muted);">No diagnostic test reports on record for your patients.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal: Write Consultation & Prescription -->
+    <div id="consultationModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 650px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Record Consultation & Issue Prescription</h3>
+                <button type="button" class="modal-close" onclick="closeModal('consultationModal')">&times;</button>
+            </div>
+            <form th:action="@{/doctor/consultation/save}" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                <input type="hidden" id="consultationAppointmentId" name="appointmentId" />
+
+                <div style="background: var(--primary-light); padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.9rem;">
+                    <div><strong>Patient:</strong> <span id="consultationPatientName">Patient</span></div>
+                    <div><strong>Chief Complaint:</strong> <span id="consultationReason">Reason</span></div>
+                </div>
+
+                <div class="form-group">
+                    <label>Reported Symptoms & Clinical Observations</label>
+                    <textarea name="symptoms" class="form-control" placeholder="Describe symptoms, duration, fever, pain scale..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Vital Signs</label>
+                    <input type="text" name="vitalSigns" class="form-control" placeholder="BP: 120/80 mmHg | Pulse: 72 bpm | Temp: 98.6 °F | SpO2: 98%" />
+                </div>
+
+                <div class="form-group">
+                    <label>Primary Diagnosis *</label>
+                    <input type="text" name="diagnosis" class="form-control" placeholder="e.g. Acute Upper Respiratory Tract Infection" required />
+                </div>
+
+                <div class="form-group">
+                    <label>Prescription & Dosage Schedule *</label>
+                    <textarea name="prescription" class="form-control" style="min-height: 100px;" placeholder="1. Medication Name - Dosage - Frequency - Duration&#10;2. Medication Name - Dosage - Frequency - Duration" required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Instructions & Dietary Advice</label>
+                    <textarea name="instructions" class="form-control" placeholder="Rest instructions, hydration, lifestyle, emergency warning signs..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Follow-up Date (Optional)</label>
+                    <input type="date" name="followUpDate" class="form-control" />
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('consultationModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Consultation & Complete Visit</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script th:src="@{/script.js}"></script>
+</body>
+</html>

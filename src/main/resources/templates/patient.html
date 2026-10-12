@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CarePulse - Patient Health Portal</title>
+    <link rel="stylesheet" th:href="@{/style.css}">
+</head>
+<body>
+    <!-- Patient Portal Navbar -->
+    <header class="navbar">
+        <a th:href="@{/patient}" class="brand">
+            <div class="brand-icon">+</div>
+            <span>CarePulse Patient Portal</span>
+        </a>
+        <div class="nav-user">
+            <span class="user-badge" th:text="'👤 ' + ${patient.user.fullName} + ' (ID: #PAT-' + ${patient.id} + ')'">Patient</span>
+            <a th:href="@{/login?portal=admin}" class="btn btn-outline btn-sm">🛡️ Switch to Admin</a>
+            <form th:action="@{/logout}" method="post" style="display:inline;">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                <button type="submit" class="btn-logout">Sign Out</button>
+            </form>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Alerts Feedback -->
+        <div th:if="${successMessage}" class="alert alert-success" th:text="${successMessage}"></div>
+        <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
+
+        <!-- Navigation Tabs -->
+        <nav class="tab-navigation">
+            <button type="button" class="tab-link active" data-tab="tab-health-overview">🏥 Health Summary</button>
+            <button type="button" class="tab-link" data-tab="tab-book-appointment">📅 Book Appointment</button>
+            <button type="button" class="tab-link" data-tab="tab-my-appointments">
+                🕒 My Visits (<span th:text="${allAppointments.size()}">0</span>)
+            </button>
+            <button type="button" class="tab-link" data-tab="tab-prescriptions">
+                💊 Prescriptions & EHR (<span th:text="${consultations.size()}">0</span>)
+            </button>
+            <button type="button" class="tab-link" data-tab="tab-test-reports">
+                🔬 Diagnostic Test Reports (<span th:text="${testReports.size()}">0</span>)
+            </button>
+            <button type="button" class="tab-link" data-tab="tab-profile-settings">⚙️ Medical Profile & Contacts</button>
+        </nav>
+
+        <!-- TAB 1: HEALTH SUMMARY -->
+        <section id="tab-health-overview" class="tab-pane active">
+            <!-- Patient Demographics Banner -->
+            <div class="panel" style="background: linear-gradient(135deg, #ffffff 0%, #f0fdfa 100%);">
+                <div class="panel-body" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1.5rem;">
+                    <div>
+                        <div style="font-size: 0.85rem; color: var(--primary); font-weight: 700; text-transform: uppercase;">Patient Medical Record</div>
+                        <h1 style="font-size: 1.75rem; font-weight: 700; color: var(--text-main);" th:text="${patient.user.fullName}">Patient Name</h1>
+                        <div style="color: var(--text-muted); font-size: 0.95rem; margin-top: 0.35rem;">
+                            <span>Age: <strong th:text="${patientAge != null ? patientAge + ' yrs' : 'N/A'}">N/A</strong></span> •
+                            <span>Gender: <strong th:text="${patient.gender != null ? patient.gender : 'Unspecified'}">Gender</strong></span> •
+                            <span>Blood Group: <strong style="color: #b91c1c;" th:text="${patient.bloodGroup != null ? patient.bloodGroup : 'N/A'}">O+</strong></span> •
+                            <span>Phone: <strong th:text="${patient.contactNumber != null ? patient.contactNumber : 'N/A'}">Phone</strong></span>
+                        </div>
+                    </div>
+                    <div style="text-align: right;">
+                        <button type="button" class="btn btn-outline btn-sm" onclick="switchTab('tab-profile-settings')">Edit Medical Details</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Allergy Hazard Warning -->
+            <div th:if="${patient.allergies != null && !patient.allergies.isEmpty()}" class="alert alert-danger" style="display: flex; align-items: center; gap: 0.75rem;">
+                <span style="font-size: 1.5rem;">⚠️</span>
+                <div>
+                    <strong>CRITICAL ALLERGY ALERT:</strong> 
+                    <span th:text="${patient.allergies}">Penicillin, Peanuts</span>
+                    <div style="font-size: 0.8rem; margin-top: 0.15rem;">Notify all attending medical staff prior to medication administration.</div>
+                </div>
+            </div>
+
+            <!-- Next Scheduled Visit Card -->
+            <div class="stat-grid">
+                <div class="stat-card" style="grid-column: 1 / -1;" th:if="${nextAppointment != null}">
+                    <div class="stat-icon icon-teal">📅</div>
+                    <div style="flex: 1;">
+                        <div style="font-size: 0.85rem; color: var(--primary); font-weight: 700; text-transform: uppercase;">Next Upcoming Consultation</div>
+                        <div style="font-size: 1.25rem; font-weight: 700;">
+                            With <span th:text="${nextAppointment.doctor.user.fullName}">Dr. Name</span> (<span th:text="${nextAppointment.doctor.department.name}">Department</span>)
+                        </div>
+                        <div style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.25rem;">
+                            Scheduled for: <strong th:text="${nextAppointment.appointmentDate} + ' at ' + ${nextAppointment.appointmentTime}">Date Time</strong> |
+                            Status: <span th:class="'badge badge-' + ${#strings.toLowerCase(nextAppointment.status)}" th:text="${nextAppointment.status}">APPROVED</span>
+                        </div>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="switchTab('tab-my-appointments')">View Schedule</button>
+                    </div>
+                </div>
+                <div class="stat-card" style="grid-column: 1 / -1;" th:if="${nextAppointment == null}">
+                    <div class="stat-icon icon-blue">💡</div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600;">No upcoming appointments currently booked.</div>
+                        <div style="font-size: 0.85rem; color: var(--text-muted);">Consult with one of our specialized physicians today.</div>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="switchTab('tab-book-appointment')">Schedule Visit Now</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Metrics Grid -->
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-icon icon-blue">📅</div>
+                    <div>
+                        <div class="stat-val" th:text="${upcomingAppointments.size()}">0</div>
+                        <div class="stat-label">Upcoming Visits</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon icon-emerald">📋</div>
+                    <div>
+                        <div class="stat-val" th:text="${consultations.size()}">0</div>
+                        <div class="stat-label">Active Prescriptions</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon icon-purple">🕒</div>
+                    <div>
+                        <div class="stat-val" th:text="${pastAppointments.size()}">0</div>
+                        <div class="stat-label">Past Consultations</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon icon-amber">💳</div>
+                    <div>
+                        <div class="stat-val" style="color: #d97706;" th:text="'₹' + ${totalPendingDues}">₹0.00</div>
+                        <div class="stat-label">Pending Medical Dues</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: BOOK APPOINTMENT -->
+        <section id="tab-book-appointment" class="tab-pane">
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">📅 Schedule a Specialist Consultation</h2>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">Immediate booking confirmation</span>
+                </div>
+                <div class="panel-body">
+                    <form th:action="@{/appointments/book}" method="post">
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="departmentSelect">1. Medical Department / Specialty *</label>
+                                <select id="departmentSelect" class="form-control" required>
+                                    <option value="">-- Choose Medical Specialty --</option>
+                                    <option th:each="dept : ${departments}" th:value="${dept.id}" th:text="${dept.name}"></option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="doctorSelect">2. Attending Physician *</label>
+                                <select id="doctorSelect" name="doctorId" class="form-control" required>
+                                    <option value="">-- Select Physician --</option>
+                                    <option th:each="doc : ${doctors}"
+                                            th:value="${doc.id}"
+                                            th:data-department="${doc.department.id}"
+                                            th:text="${doc.user.fullName} + ' (' + ${doc.department.name} + ' - Consultation: ₹' + ${doc.consultationFee} + ')'">
+                                    </option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="appointmentDate">3. Preferred Appointment Date *</label>
+                                <input type="date" id="appointmentDate" name="appointmentDate" class="form-control" required />
+                            </div>
+
+                            <div class="form-group">
+                                <label for="appointmentTime">4. Preferred Appointment Time *</label>
+                                <input type="time" id="appointmentTime" name="appointmentTime" class="form-control" required />
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-top: 0.5rem;">
+                            <label for="reason">5. Symptoms / Primary Reason for Consultation *</label>
+                            <textarea id="reason" name="reason" class="form-control" placeholder="Describe symptoms, duration, or previous diagnoses for the physician's review..." required></textarea>
+                        </div>
+
+                        <div style="text-align: right; margin-top: 1rem;">
+                            <button type="submit" class="btn btn-primary" style="padding: 0.75rem 2rem;">
+                                Submit Appointment Request
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: MY APPOINTMENTS -->
+        <section id="tab-my-appointments" class="tab-pane">
+            <!-- Upcoming Appointments -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Upcoming Scheduled Consultations</h2>
+                    <span class="badge badge-approved" th:text="${upcomingAppointments.size()} + ' Scheduled'">0</span>
+                </div>
+                <div class="panel-body table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Physician</th>
+                                <th>Clinical Department</th>
+                                <th>Date & Time</th>
+                                <th>Reason for Visit</th>
+                                <th>Fee & Payment</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="appt : ${upcomingAppointments}">
+                                <td>
+                                    <strong th:text="${appt.doctor.user.fullName}">Dr. Name</strong><br/>
+                                    <small style="color: var(--text-muted);" th:text="${appt.doctor.specialization}">Specialty</small>
+                                </td>
+                                <td><span class="user-badge" th:text="${appt.doctor.department.name}">Dept</span></td>
+                                <td>
+                                    <strong th:text="${appt.appointmentDate}">Date</strong><br/>
+                                    <small style="color: var(--text-muted);" th:text="${appt.appointmentTime}">Time</small>
+                                </td>
+                                <td th:text="${appt.reason}">Reason</td>
+                                <td>
+                                    <strong>₹<span th:text="${appt.feeAmount != null ? appt.feeAmount : appt.doctor.consultationFee}">500.00</span></strong><br/>
+                                    <span th:class="'badge ' + (${appt.paymentStatus == 'PAID'} ? 'badge-paid' : 'badge-unpaid')"
+                                          th:text="${appt.paymentStatus}">PAID</span>
+                                </td>
+                                <td>
+                                    <span th:class="'badge badge-' + ${#strings.toLowerCase(appt.status)}" th:text="${appt.status}">PENDING</span>
+                                </td>
+                                <td>
+                                    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                                        <button type="button" class="btn btn-primary btn-sm"
+                                                style="background: #16a34a; border-color: #16a34a;"
+                                                th:if="${appt.paymentStatus == 'PENDING'}"
+                                                th:data-id="${appt.id}"
+                                                th:data-title="'Consultation with ' + ${appt.doctor.user.fullName}"
+                                                th:data-amount="${appt.feeAmount != null ? appt.feeAmount : appt.doctor.consultationFee}"
+                                                th:data-action="@{'/appointments/' + ${appt.id} + '/pay'}"
+                                                onclick="openPaymentModal('appointment', this.getAttribute('data-id'), this.getAttribute('data-title'), this.getAttribute('data-amount'), this.getAttribute('data-action'))">
+                                            💳 Pay (₹<span th:text="${appt.feeAmount != null ? appt.feeAmount : appt.doctor.consultationFee}">500</span>)
+                                        </button>
+                                        <form th:action="@{'/appointments/' + ${appt.id} + '/cancel'}" method="post" style="display:inline;" onsubmit="return confirmAction('Are you sure you want to cancel this appointment?');">
+                                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                                            <button type="submit" class="btn btn-outline btn-sm" style="color: var(--danger);">Cancel</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr th:if="${#lists.isEmpty(upcomingAppointments)}">
+                                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">
+                                    No upcoming appointments scheduled.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Past Consultations History -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Past Visit History</h2>
+                    <span class="badge badge-completed" th:text="${pastAppointments.size()} + ' Past Visits'">0</span>
+                </div>
+                <div class="panel-body table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Physician</th>
+                                <th>Department</th>
+                                <th>Complaint / Reason</th>
+                                <th>Fee & Payment</th>
+                                <th>Status</th>
+                                <th>Clinical Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="appt : ${pastAppointments}">
+                                <td th:text="${appt.appointmentDate}">Date</td>
+                                <td th:text="${appt.doctor.user.fullName}">Doctor</td>
+                                <td th:text="${appt.doctor.department.name}">Department</td>
+                                <td th:text="${appt.reason}">Reason</td>
+                                <td>
+                                    <strong>₹<span th:text="${appt.feeAmount != null ? appt.feeAmount : appt.doctor.consultationFee}">500.00</span></strong><br/>
+                                    <span th:class="'badge ' + (${appt.paymentStatus == 'PAID'} ? 'badge-paid' : 'badge-unpaid')"
+                                          th:text="${appt.paymentStatus}">PAID</span>
+                                    <div th:if="${appt.paymentStatus == 'PENDING'}" style="margin-top: 0.25rem;">
+                                        <button type="button" class="btn btn-primary btn-sm"
+                                                style="padding: 0.2rem 0.5rem; font-size: 0.75rem; background: #16a34a; border-color: #16a34a;"
+                                                th:data-id="${appt.id}"
+                                                th:data-title="'Consultation with ' + ${appt.doctor.user.fullName}"
+                                                th:data-amount="${appt.feeAmount != null ? appt.feeAmount : appt.doctor.consultationFee}"
+                                                th:data-action="@{'/appointments/' + ${appt.id} + '/pay'}"
+                                                onclick="openPaymentModal('appointment', this.getAttribute('data-id'), this.getAttribute('data-title'), this.getAttribute('data-amount'), this.getAttribute('data-action'))">
+                                            Pay Dues
+                                        </button>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span th:class="'badge badge-' + ${#strings.toLowerCase(appt.status)}" th:text="${appt.status}">STATUS</span>
+                                </td>
+                                <td>
+                                    <button type="button" class="btn btn-outline btn-sm" th:if="${appt.status == 'COMPLETED'}" onclick="switchTab('tab-prescriptions')">
+                                        View Prescription
+                                    </button>
+                                    <span th:if="${appt.status != 'COMPLETED'}" style="color: var(--text-muted); font-size: 0.85rem;">-</span>
+                                </td>
+                            </tr>
+                            <tr th:if="${#lists.isEmpty(pastAppointments)}">
+                                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">
+                                    No past consultation history recorded.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: PRESCRIPTIONS & EHR -->
+        <section id="tab-prescriptions" class="tab-pane">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <div>
+                    <h2 class="panel-title" style="font-size: 1.4rem;">Official Medical Prescriptions & Consultation Notes</h2>
+                    <p style="color: var(--text-muted); font-size: 0.9rem;">Electronically signed by attending physicians</p>
+                </div>
+                <div>
+                    <button type="button" class="btn btn-outline" onclick="printPrescription()">🖨️ Print Records</button>
+                </div>
+            </div>
+
+            <!-- List of Formal Prescription Cards -->
+            <div th:each="c : ${consultations}" class="prescription-card">
+                <div class="rx-header">
+                    <div class="rx-doctor-info">
+                        <strong th:text="${c.doctor.user.fullName}">Dr. Sarah Smith, MD</strong>
+                        <div style="font-size: 0.85rem; color: var(--text-muted);" th:text="${c.doctor.specialization} + ' • ' + ${c.doctor.department.name}">Specialty</div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted);" th:text="${c.doctor.qualifications}">Qualifications</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div class="rx-badge">℞</div>
+                        <div style="font-size: 0.85rem; color: var(--text-muted);" th:text="${#temporals.format(c.consultationDate, 'MMMM dd, yyyy - hh:mm a')}">Date</div>
+                    </div>
+                </div>
+
+                <!-- Diagnosis Block -->
+                <div class="rx-diagnosis-block">
+                    <div><strong>Clinical Diagnosis:</strong> <span th:text="${c.diagnosis}">Diagnosis</span></div>
+                    <div th:if="${c.vitalSigns != null && !c.vitalSigns.isEmpty()}" style="font-size: 0.85rem; margin-top: 0.25rem;">
+                        <strong>Recorded Vitals:</strong> <span th:text="${c.vitalSigns}">BP: 120/80</span>
+                    </div>
+                </div>
+
+                <!-- Prescribed Medication Schedule -->
+                <div style="font-size: 0.85rem; font-weight: 700; color: var(--primary); text-transform: uppercase; margin-bottom: 0.35rem;">Prescribed Medication & Regimen:</div>
+                <div class="rx-medication-block" th:text="${c.prescription}">
+                    1. Medication Name - Dosage - Frequency - Duration
+                </div>
+
+                <!-- Physician Instructions -->
+                <div th:if="${c.instructions != null && !c.instructions.isEmpty()}" style="margin-bottom: 1rem;">
+                    <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.25rem;">Special Instructions & Dietary Advice:</div>
+                    <div style="background: #ffffff; border: 1px solid var(--border); padding: 0.75rem; border-radius: 6px; font-size: 0.9rem; color: #334155;" th:text="${c.instructions}">
+                        Instructions
+                    </div>
+                </div>
+
+                <!-- Follow up & Signature Footer -->
+                <div class="rx-footer">
+                    <div>
+                        <span th:if="${c.followUpDate != null}">
+                            <strong>Scheduled Follow-Up:</strong> <span style="color: var(--accent); font-weight: 600;" th:text="${c.followUpDate}">Date</span>
+                        </span>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="font-style: italic; color: var(--text-muted);">Electronically Validated Prescription</span>
+                    </div>
+                </div>
+            </div>
+
+            <div th:if="${#lists.isEmpty(consultations)}" class="panel">
+                <div class="panel-body" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">
+                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">📋</div>
+                    <h3>No Clinical Prescriptions on Record</h3>
+                    <p style="font-size: 0.9rem; margin-top: 0.25rem;">Completed consultations and digital medication records will be accessible here.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB: DIAGNOSTIC TEST REPORTS -->
+        <section id="tab-test-reports" class="tab-pane">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+                <div>
+                    <h2 class="panel-title" style="font-size: 1.4rem;">🔬 Diagnostic & Pathology Lab Reports</h2>
+                    <p style="color: var(--text-muted); font-size: 0.9rem;">Official verified laboratory investigations, findings, and reference ranges</p>
+                </div>
+                <div>
+                    <button type="button" class="btn btn-outline" onclick="window.print()">🖨️ Print Lab Reports</button>
+                </div>
+            </div>
+
+            <!-- List of Test Report Cards -->
+            <div th:each="report : ${testReports}" class="test-report-card">
+                <div class="report-header">
+                    <div>
+                        <div class="report-title" th:text="${report.testName}">Complete Blood Count (CBC)</div>
+                        <div class="report-meta">
+                            <span>Category: <strong th:text="${report.testCategory}">Pathology / Hematology</strong></span> • 
+                            <span>Ref #: <code th:text="${report.labReferenceNumber}">LAB-2026-001</code></span> • 
+                            <span>Date: <strong th:text="${report.testDate}">2026-10-10</strong></span> • 
+                            <span>Advised By: <strong th:text="${report.doctor != null ? report.doctor.user.fullName : 'Hospital Staff'}">Dr. Rajesh Sharma</strong></span>
+                        </div>
+                    </div>
+                    <div style="text-align: right;">
+                        <span th:class="'badge ' + (${report.status == 'NORMAL'} ? 'badge-completed' : (${report.status == 'CRITICAL'} ? 'badge-cancelled' : 'badge-pending'))"
+                              th:text="${report.status}">NORMAL</span>
+                    </div>
+                </div>
+
+                <!-- Results Box -->
+                <div style="font-size: 0.85rem; font-weight: 700; color: var(--primary); text-transform: uppercase;">Laboratory Findings & Measurements:</div>
+                <div class="report-results-box" th:text="${report.testResult}">
+                    Findings here...
+                </div>
+
+                <div th:if="${report.normalRange != null && !report.normalRange.isEmpty()}" style="margin-bottom: 0.75rem; font-size: 0.85rem; color: var(--text-muted);">
+                    <strong>Standard Reference Range:</strong> <span th:text="${report.normalRange}">Range</span>
+                </div>
+
+                <div th:if="${report.remarks != null && !report.remarks.isEmpty()}" style="margin-bottom: 1rem; font-size: 0.875rem; background: #fffbeb; border: 1px solid #fef3c7; padding: 0.6rem 0.85rem; border-radius: 6px; color: #92400e;">
+                    <strong>Pathologist Remarks:</strong> <span th:text="${report.remarks}">Remarks</span>
+                </div>
+
+                <!-- Footer with fee and payment -->
+                <div class="report-footer">
+                    <div>
+                        <span>Investigation Fee: <strong>₹<span th:text="${report.testFee}">650.00</span></strong></span> • 
+                        <span>Payment: 
+                            <span th:class="'badge ' + (${report.paymentStatus == 'PAID'} ? 'badge-paid' : 'badge-unpaid')"
+                                  th:text="${report.paymentStatus}">PAID</span>
+                        </span>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-primary btn-sm"
+                                style="background: #16a34a; border-color: #16a34a;"
+                                th:if="${report.paymentStatus == 'PENDING'}"
+                                th:data-id="${report.id}"
+                                th:data-title="'Lab Test: ' + ${report.testName} + ' (' + ${report.labReferenceNumber} + ')'"
+                                th:data-amount="${report.testFee}"
+                                th:data-action="@{'/patient/testreport/' + ${report.id} + '/pay'}"
+                                onclick="openPaymentModal('testreport', this.getAttribute('data-id'), this.getAttribute('data-title'), this.getAttribute('data-amount'), this.getAttribute('data-action'))">
+                            💳 Pay Test Fee (₹<span th:text="${report.testFee}">650</span>)
+                        </button>
+                        <span th:if="${report.paymentStatus == 'PAID'}" style="color: #16a34a; font-weight: 600; font-size: 0.85rem;">✓ Fee Cleared</span>
+                    </div>
+                </div>
+            </div>
+
+            <div th:if="${#lists.isEmpty(testReports)}" class="panel">
+                <div class="panel-body" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">
+                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔬</div>
+                    <h3>No Diagnostic Test Reports on Record</h3>
+                    <p style="font-size: 0.9rem; margin-top: 0.25rem;">Prescribed lab investigations, blood panels, and imaging reports will appear here.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 5: PROFILE SETTINGS -->
+        <section id="tab-profile-settings" class="tab-pane">
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Personal Medical Profile & Emergency Contacts</h2>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">Ensure medical details remain accurate</span>
+                </div>
+                <div class="panel-body">
+                    <form th:action="@{/patient/profile/update}" method="post">
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Contact Phone Number *</label>
+                                <input type="text" name="contactNumber" class="form-control" th:value="${patient.contactNumber}" required />
+                            </div>
+
+                            <div class="form-group">
+                                <label>Residential Address</label>
+                                <input type="text" name="address" class="form-control" th:value="${patient.address}" />
+                            </div>
+
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label>Primary Emergency Contact (Full Name & Phone) *</label>
+                                <input type="text" name="emergencyContact" class="form-control" th:value="${patient.emergencyContact}" placeholder="e.g. Mary Doe (+1 555-019-2832)" required />
+                            </div>
+
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label>Past Medical History & Chronic Conditions</label>
+                                <textarea name="medicalHistory" class="form-control" th:text="${patient.medicalHistory}" placeholder="List past surgeries, chronic conditions, family medical history..."></textarea>
+                            </div>
+
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label>Known Allergies (Medications, Foods, Environmental)</label>
+                                <input type="text" name="allergies" class="form-control" th:value="${patient.allergies}" placeholder="e.g. Penicillin, Sulfa drugs, Peanuts, Latex" />
+                            </div>
+                        </div>
+
+                        <div style="text-align: right; margin-top: 1rem;">
+                            <button type="submit" class="btn btn-primary" style="padding: 0.75rem 2rem;">
+                                Save Updated Health Profile
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- CarePulse Express Checkout & Payment Modal -->
+    <div id="paymentModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 580px;">
+            <div class="modal-header">
+                <h3 class="modal-title">💳 CarePulse Secure Payment Gateway</h3>
+                <button type="button" class="modal-close" onclick="closeModal('paymentModal')">&times;</button>
+            </div>
+
+            <!-- Bill Overview Banner -->
+            <div class="bill-summary-banner">
+                <div>
+                    <div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.9;">Total Payable Amount</div>
+                    <div id="paymentBillAmount" class="bill-amount-display">₹ 0.00</div>
+                    <div id="paymentBillTitle" style="font-size: 0.85rem; opacity: 0.9; margin-top: 0.2rem;">Medical Consultation Fee</div>
+                </div>
+                <div style="text-align: right; font-size: 0.8rem; opacity: 0.85;">
+                    <div>🔒 256-bit Encrypted</div>
+                    <div>Instant Receipt</div>
+                </div>
+            </div>
+
+            <!-- Payment Method Tabs -->
+            <div class="payment-tabs">
+                <button type="button" class="payment-tab-btn active" data-channel="upi" onclick="selectPaymentChannel('upi')">
+                    📱 UPI / QR Code
+                </button>
+                <button type="button" class="payment-tab-btn" data-channel="netbanking" onclick="selectPaymentChannel('netbanking')">
+                    🏦 Net Banking
+                </button>
+                <button type="button" class="payment-tab-btn" data-channel="cash" onclick="selectPaymentChannel('cash')">
+                    💵 Hospital Cash Desk
+                </button>
+            </div>
+
+            <!-- FORM -->
+            <form id="paymentGatewayForm" method="post" action="">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                <input type="hidden" id="paymentMethodInput" name="paymentMethod" value="UPI" />
+
+                <!-- 1. UPI CHANNEL PANE -->
+                <div id="channel-upi" class="payment-channel-pane active">
+                    <div class="qr-box">
+                        <img id="paymentUpiQr" class="qr-img" src="" alt="Scan UPI QR Code" />
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.4rem;">Scan with any UPI app on your phone</div>
+                        <div class="upi-id-badge">
+                            <span>carepulse.billing@okhdfcbank</span>
+                            <button type="button" class="copy-btn" onclick="copyText('carepulse.billing@okhdfcbank', this)">Copy</button>
+                        </div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted); display: flex; gap: 0.75rem; justify-content: center;">
+                            <span>🟢 Google Pay</span> • <span>🟣 PhonePe</span> • <span>🔵 Paytm</span> • <span>🟠 BHIM</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="upiTxnRef">UPI Transaction Ref / 12-Digit UTR (Optional)</label>
+                        <input type="text" id="upiTxnRef" name="transactionReference" class="form-control" placeholder="e.g. 423987112045 or UPI Reference" />
+                        <small style="color: var(--text-muted); font-size: 0.8rem;">Enter reference number after scanning to reconcile with hospital accounts</small>
+                    </div>
+                </div>
+
+                <!-- 2. NET BANKING CHANNEL PANE -->
+                <div id="channel-netbanking" class="payment-channel-pane">
+                    <div class="bank-details-card">
+                        <div style="font-size: 0.8rem; font-weight: 700; color: var(--primary); text-transform: uppercase; margin-bottom: 0.6rem;">
+                            CarePulse Hospital Official Beneficiary Account:
+                        </div>
+                        <div class="bank-row">
+                            <span style="color: var(--text-muted);">Account Name:</span>
+                            <strong>CarePulse Healthcare Pvt Ltd</strong>
+                        </div>
+                        <div class="bank-row">
+                            <span style="color: var(--text-muted);">Bank Name:</span>
+                            <strong>HDFC Bank</strong>
+                        </div>
+                        <div class="bank-row">
+                            <span style="color: var(--text-muted);">Account Number:</span>
+                            <span>
+                                <code style="font-size: 0.95rem; font-weight: 700;">50200084729104</code>
+                                <button type="button" class="copy-btn" onclick="copyText('50200084729104', this)">Copy</button>
+                            </span>
+                        </div>
+                        <div class="bank-row">
+                            <span style="color: var(--text-muted);">IFSC Code:</span>
+                            <span>
+                                <code style="font-size: 0.95rem; font-weight: 700;">HDFC0001234</code>
+                                <button type="button" class="copy-btn" onclick="copyText('HDFC0001234', this)">Copy</button>
+                            </span>
+                        </div>
+                        <div class="bank-row">
+                            <span style="color: var(--text-muted);">Branch:</span>
+                            <span>Indiranagar Branch, Bengaluru - 560038</span>
+                        </div>
+                        <div class="bank-row">
+                            <span style="color: var(--text-muted);">Account Type:</span>
+                            <span>Current Account</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="bankTxnRef">NEFT / RTGS / IMPS Reference Number *</label>
+                        <input type="text" id="bankTxnRef" name="transactionReference" class="form-control" placeholder="e.g. HDFCN2609817203" />
+                        <small style="color: var(--text-muted); font-size: 0.8rem;">Transfer via your bank portal/app and enter the reference number</small>
+                    </div>
+                </div>
+
+                <!-- 3. CASH DESK CHANNEL PANE -->
+                <div id="channel-cash" class="payment-channel-pane">
+                    <div class="counter-desk-box">
+                        <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 0.35rem;">💵 Hospital OPD Billing Counter</div>
+                        <p style="font-size: 0.85rem; line-height: 1.5; margin: 0;">
+                            Please present your Medical ID (#PAT-<span th:text="${patient.id}"></span>) at <strong>Cash Counter #2 or #3</strong> in the OPD Main Reception. The cashier will collect cash and issue your official receipt.
+                        </p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cashReceiptRef">Cashier Slip / Counter Receipt # (Optional)</label>
+                        <input type="text" id="cashReceiptRef" name="transactionReference" class="form-control" placeholder="e.g. CASH-OPD-7812" />
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.25rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('paymentModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: #16a34a; border-color: #16a34a; padding: 0.65rem 1.75rem;">
+                        ✓ Confirm Payment (<span id="paymentBtnAmount">₹ 0.00</span>)
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script th:src="@{/script.js}"></script>
+</body>
+</html>
